@@ -1,0 +1,8 @@
+*.o
+*.a
+*.out
+*.exe
+*.dSYM/
+test_image_packing
+test_image_packing_sanitized
+.DS_Store
