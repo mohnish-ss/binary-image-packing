@@ -51,7 +51,3 @@ Remove generated files with `make clean`.
 - Round-trip testing
 - AddressSanitizer
 - UndefinedBehaviorSanitizer
-
-## Authors
-
-Developed individually by Mohnish Sheth.
