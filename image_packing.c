@@ -1,12 +1,13 @@
 #include "image_packing.h"
 
-#include <limits.h>
 #include <string.h>
+
+// Number of bits in one byte.
+#define ONE_BYTE 8
 
 size_t binary_image_packed_size(size_t pixel_count) {
     // Round up so any leftover pixels get their own byte (9 pixels need 2 bytes).
-    // CHAR_BIT is the number of bits in a byte, normally 8.
-    return (pixel_count + CHAR_BIT - 1) / CHAR_BIT;
+    return (pixel_count + ONE_BYTE - 1) / ONE_BYTE;
 }
 
 // Check every pixel before packing so invalid input leaves the output unchanged.
@@ -46,8 +47,8 @@ BinaryImageStatus binary_image_pack(const uint8_t *pixels, size_t pixel_count, u
         if (pixels[index] == '1') {
             // Fill each byte from its highest bit to its lowest bit.
             // With 8-bit bytes, pixel 0 uses bit 7 and pixel 8 uses bit 7 of byte 1.
-            const size_t byte_index = index / CHAR_BIT;
-            const size_t bit_index = CHAR_BIT - 1 - index % CHAR_BIT;
+            const size_t byte_index = index / ONE_BYTE;
+            const size_t bit_index = ONE_BYTE - 1 - index % ONE_BYTE;
 
             // Shift a single 1 into place, then OR it into the byte.
             packed[byte_index] |= (1U << bit_index);
@@ -74,8 +75,8 @@ BinaryImageStatus binary_image_unpack(const uint8_t *packed, size_t pixel_count,
 
     for (size_t index = 0; index < pixel_count; ++index) {
         // Locate the same byte and bit used when packing this pixel.
-        const size_t byte_index = index / CHAR_BIT;
-        const size_t bit_index = CHAR_BIT - 1 - index % CHAR_BIT;
+        const size_t byte_index = index / ONE_BYTE;
+        const size_t bit_index = ONE_BYTE - 1 - index % ONE_BYTE;
 
         // AND with a single-bit mask to check whether that bit is set.
         // Restore character bytes ('0' or '1'), rather than numeric 0 or 1.
