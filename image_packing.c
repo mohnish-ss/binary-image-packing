@@ -3,94 +3,87 @@
 #include <limits.h>
 #include <string.h>
 
-size_t binary_image_packed_size(size_t pixel_count)
-{
-    return (pixel_count + (size_t)CHAR_BIT - 1U) / (size_t)CHAR_BIT;
+size_t binary_image_packed_size(size_t pixel_count) {
+    // Round up so any leftover pixels get their own byte (9 pixels need 2 bytes).
+    // CHAR_BIT is the number of bits in a byte, normally 8.
+    return (pixel_count + CHAR_BIT - 1) / CHAR_BIT;
 }
 
-static BinaryImageStatus validate_pixels(const uint8_t *pixels, size_t pixel_count)
-{
-    for (size_t index = 0; index < pixel_count; ++index)
-    {
-        if (pixels[index] != (uint8_t)'0' && pixels[index] != (uint8_t)'1')
-        {
+// Check every pixel before packing so invalid input leaves the output unchanged.
+static BinaryImageStatus validate_pixels(const uint8_t *pixels, size_t pixel_count) {
+    for (size_t index = 0; index < pixel_count; ++index) {
+        if (pixels[index] != '0' && pixels[index] != '1') {
             return BINARY_IMAGE_INVALID_PIXEL;
         }
     }
     return BINARY_IMAGE_OK;
 }
 
-BinaryImageStatus binary_image_pack(const uint8_t *pixels,
-                                    size_t pixel_count,
-                                    uint8_t *packed,
-                                    size_t packed_capacity,
-                                    size_t *bytes_written)
-{
-    if (pixels == NULL || packed == NULL || bytes_written == NULL)
-    {
+BinaryImageStatus binary_image_pack(const uint8_t *pixels, size_t pixel_count, uint8_t *packed,
+                                    size_t packed_capacity, size_t *bytes_written) {
+    // Reject missing pointers, invalid image sizes, and buffers that are too small.
+    if (pixels == NULL || packed == NULL || bytes_written == NULL) {
         return BINARY_IMAGE_NULL_POINTER;
     }
-    if (pixel_count == 0U || pixel_count > BINARY_IMAGE_MAX_PIXELS)
-    {
+    if (pixel_count == 0U || pixel_count > BINARY_IMAGE_MAX_PIXELS) {
         return BINARY_IMAGE_INVALID_SIZE;
     }
 
     const size_t required_bytes = binary_image_packed_size(pixel_count);
-    if (packed_capacity < required_bytes)
-    {
+    if (packed_capacity < required_bytes) {
         return BINARY_IMAGE_INSUFFICIENT_CAPACITY;
     }
 
     const BinaryImageStatus validation = validate_pixels(pixels, pixel_count);
-    if (validation != BINARY_IMAGE_OK)
-    {
+    if (validation != BINARY_IMAGE_OK) {
         return validation;
     }
 
+    // Start with all bits cleared, including unused bits in the last byte.
     memset(packed, 0, required_bytes);
 
-    for (size_t index = 0; index < pixel_count; ++index)
-    {
-        if (pixels[index] == (uint8_t)'1')
-        {
-            const size_t byte_index = index / (size_t)CHAR_BIT;
-            const unsigned bit_index =
-                (unsigned)((size_t)CHAR_BIT - 1U - index % (size_t)CHAR_BIT);
-            packed[byte_index] |= (uint8_t)(UINT8_C(1) << bit_index);
+    for (size_t index = 0; index < pixel_count; ++index) {
+        if (pixels[index] == '1') {
+            // Fill each byte from its highest bit to its lowest bit.
+            // With 8-bit bytes, pixel 0 uses bit 7 and pixel 8 uses bit 7 of byte 1.
+            const size_t byte_index = index / CHAR_BIT;
+            const size_t bit_index = CHAR_BIT - 1 - index % CHAR_BIT;
+
+            // Shift a single 1 into place, then OR it into the byte.
+            packed[byte_index] |= (1U << bit_index);
         }
     }
 
+    // Report the output length only after packing succeeds.
     *bytes_written = required_bytes;
     return BINARY_IMAGE_OK;
 }
 
-BinaryImageStatus binary_image_unpack(const uint8_t *packed,
-                                      size_t pixel_count,
-                                      uint8_t *pixels,
-                                      size_t pixel_capacity)
-{
-    if (packed == NULL || pixels == NULL)
-    {
+BinaryImageStatus binary_image_unpack(const uint8_t *packed, size_t pixel_count, uint8_t *pixels,
+                                      size_t pixel_capacity) {
+    // The caller supplies pixel_count because the last byte may contain padding.
+    if (packed == NULL || pixels == NULL) {
         return BINARY_IMAGE_NULL_POINTER;
     }
-    if (pixel_count == 0U || pixel_count > BINARY_IMAGE_MAX_PIXELS)
-    {
+    if (pixel_count == 0U || pixel_count > BINARY_IMAGE_MAX_PIXELS) {
         return BINARY_IMAGE_INVALID_SIZE;
     }
-    if (pixel_capacity < pixel_count)
-    {
+    if (pixel_capacity < pixel_count) {
         return BINARY_IMAGE_INSUFFICIENT_CAPACITY;
     }
 
-    for (size_t index = 0; index < pixel_count; ++index)
-    {
-        const size_t byte_index = index / (size_t)CHAR_BIT;
-        const unsigned bit_index =
-            (unsigned)((size_t)CHAR_BIT - 1U - index % (size_t)CHAR_BIT);
-        pixels[index] =
-            (packed[byte_index] & (uint8_t)(UINT8_C(1) << bit_index)) != 0U
-                ? (uint8_t)'1'
-                : (uint8_t)'0';
+    for (size_t index = 0; index < pixel_count; ++index) {
+        // Locate the same byte and bit used when packing this pixel.
+        const size_t byte_index = index / CHAR_BIT;
+        const size_t bit_index = CHAR_BIT - 1 - index % CHAR_BIT;
+
+        // AND with a single-bit mask to check whether that bit is set.
+        // Restore character bytes ('0' or '1'), rather than numeric 0 or 1.
+        if ((packed[byte_index] & (1U << bit_index)) != 0) {
+            pixels[index] = '1';
+        } else {
+            pixels[index] = '0';
+        }
     }
 
     return BINARY_IMAGE_OK;
